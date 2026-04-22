@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      drip_readings: {
+        Row: {
+          buzzer_status: boolean
+          created_at: string
+          drip_rate: number
+          gsm_sent: boolean
+          id: string
+          led_status: boolean
+          weight: number
+        }
+        Insert: {
+          buzzer_status?: boolean
+          created_at?: string
+          drip_rate?: number
+          gsm_sent?: boolean
+          id?: string
+          led_status?: boolean
+          weight: number
+        }
+        Update: {
+          buzzer_status?: boolean
+          created_at?: string
+          drip_rate?: number
+          gsm_sent?: boolean
+          id?: string
+          led_status?: boolean
+          weight?: number
+        }
+        Relationships: []
+      }
+      drip_settings: {
+        Row: {
+          empty_threshold: number
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          empty_threshold?: number
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          empty_threshold?: number
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
