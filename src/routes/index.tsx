@@ -321,6 +321,15 @@ function Dashboard() {
                   strokeWidth={2}
                   fill="url(#wGrad)"
                 />
+                <Line
+                  type="monotone"
+                  dataKey="trend"
+                  stroke="var(--warning)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  isAnimationActive={false}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
