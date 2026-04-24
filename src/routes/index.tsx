@@ -12,6 +12,8 @@ import {
   Clock,
   Settings as SettingsIcon,
   Wifi,
+  TrendingDown,
+  ShieldCheck,
 } from "lucide-react";
 import {
   LineChart,
