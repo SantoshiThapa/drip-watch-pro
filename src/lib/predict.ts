@@ -3,15 +3,29 @@ export type Reading = {
   created_at: string;
 };
 
+export type Confidence = "low" | "medium" | "high";
+
+export type Prediction = {
+  minutesRemaining: number | null;
+  mlPerMin: number | null;
+  confidence: Confidence;
+  r2: number | null;
+  samples: number;
+};
+
 /**
  * Linear-regression based time-to-empty estimator.
  * Uses up to the last `windowMs` of readings.
- * Returns minutes remaining, or null if no meaningful drain trend.
+ * Returns minutes remaining, ml/min drain rate, and a confidence score
+ * derived from the regression's R² (goodness of fit) and sample count.
+ *
+ * @param threshold - weight value considered "empty" (default 0)
  */
 export function predictMinutesRemaining(
   readings: Reading[],
   windowMs = 5 * 60 * 1000,
-): { minutesRemaining: number | null; mlPerMin: number | null } {
+  threshold = 0,
+): Prediction {
   if (readings.length < 2) return { minutesRemaining: null, mlPerMin: null };
 
   const sorted = [...readings].sort(
