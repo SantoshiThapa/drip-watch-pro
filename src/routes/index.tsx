@@ -289,6 +289,16 @@ function Dashboard() {
           />
         </section>
 
+        {/* Prediction card */}
+        <PredictionCard
+          minutesRemaining={prediction.minutesRemaining}
+          emptyClock={emptyClock}
+          confidence={prediction.confidence}
+          mlPerMin={prediction.mlPerMin}
+          tone={predictionTone}
+          threshold={threshold}
+        />
+
         {/* Charts */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Weight vs Time" subtitle="ml">
