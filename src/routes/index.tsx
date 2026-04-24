@@ -12,6 +12,8 @@ import {
   Clock,
   Settings as SettingsIcon,
   Wifi,
+  TrendingDown,
+  ShieldCheck,
 } from "lucide-react";
 import {
   LineChart,
@@ -25,7 +27,7 @@ import {
   AreaChart,
 } from "recharts";
 import { format, formatDistanceToNow } from "date-fns";
-import { predictMinutesRemaining, formatDuration } from "@/lib/predict";
+import { predictMinutesRemaining, formatDuration, type Confidence } from "@/lib/predict";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -116,21 +118,62 @@ function Dashboard() {
   }, [latest, threshold]);
 
   const prediction = useMemo(
-    () => predictMinutesRemaining(readings.map((r) => ({ weight: r.weight, created_at: r.created_at }))),
-    [readings],
+    () =>
+      predictMinutesRemaining(
+        readings.map((r) => ({ weight: r.weight, created_at: r.created_at })),
+        5 * 60 * 1000,
+        threshold,
+      ),
+    [readings, threshold],
   );
 
-  const chartData = useMemo(
-    () =>
-      [...readings]
-        .reverse()
-        .map((r) => ({
-          time: format(new Date(r.created_at), "HH:mm:ss"),
-          weight: Number(r.weight),
-          dripRate: Number(r.drip_rate),
-        })),
-    [readings],
-  );
+  const emptyClock = useMemo(() => {
+    const m = prediction.minutesRemaining;
+    if (m === null || !isFinite(m)) return null;
+    const d = new Date(now + m * 60_000);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }, [prediction.minutesRemaining, now]);
+
+  const predictionTone: "normal" | "warning" | "critical" =
+    prediction.minutesRemaining === null
+      ? "normal"
+      : prediction.minutesRemaining < 5
+        ? "critical"
+        : prediction.minutesRemaining < 15
+          ? "warning"
+          : "normal";
+
+  const chartData = useMemo(() => {
+    const ordered = [...readings].reverse();
+    // Compute a trend line from the same regression used for prediction
+    let slope = 0;
+    let intercept = 0;
+    if (ordered.length >= 2) {
+      const t0 = new Date(ordered[0].created_at).getTime();
+      const xs = ordered.map((r) => (new Date(r.created_at).getTime() - t0) / 60000);
+      const ys = ordered.map((r) => Number(r.weight));
+      const n = xs.length;
+      const sX = xs.reduce((a, b) => a + b, 0);
+      const sY = ys.reduce((a, b) => a + b, 0);
+      const sXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+      const sXX = xs.reduce((a, x) => a + x * x, 0);
+      const denom = n * sXX - sX * sX;
+      if (denom !== 0) {
+        slope = (n * sXY - sX * sY) / denom;
+        intercept = (sY - slope * sX) / n;
+      }
+    }
+    const t0 = ordered.length ? new Date(ordered[0].created_at).getTime() : 0;
+    return ordered.map((r) => {
+      const x = (new Date(r.created_at).getTime() - t0) / 60000;
+      return {
+        time: format(new Date(r.created_at), "HH:mm:ss"),
+        weight: Number(r.weight),
+        dripRate: Number(r.drip_rate),
+        trend: ordered.length >= 2 ? Math.max(0, intercept + slope * x) : null,
+      };
+    });
+  }, [readings]);
 
   const saveThreshold = async () => {
     const v = Number(thresholdInput);
@@ -209,13 +252,7 @@ function Dashboard() {
                 : "estimating…"
             }
             icon={<Clock className="h-5 w-5" />}
-            tone={
-              prediction.minutesRemaining !== null && prediction.minutesRemaining < 10
-                ? "critical"
-                : prediction.minutesRemaining !== null && prediction.minutesRemaining < 30
-                  ? "warning"
-                  : "normal"
-            }
+            tone={predictionTone}
           />
           <KpiCard
             label="Last Update"
@@ -254,6 +291,16 @@ function Dashboard() {
           />
         </section>
 
+        {/* Prediction card */}
+        <PredictionCard
+          minutesRemaining={prediction.minutesRemaining}
+          emptyClock={emptyClock}
+          confidence={prediction.confidence}
+          mlPerMin={prediction.mlPerMin}
+          tone={predictionTone}
+          threshold={threshold}
+        />
+
         {/* Charts */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Weight vs Time" subtitle="ml">
@@ -275,6 +322,15 @@ function Dashboard() {
                   stroke="var(--primary)"
                   strokeWidth={2}
                   fill="url(#wGrad)"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="trend"
+                  stroke="var(--warning)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -464,6 +520,99 @@ function ChartCard({
         {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
       </div>
       {children}
+    </div>
+  );
+}
+
+function PredictionCard({
+  minutesRemaining,
+  emptyClock,
+  confidence,
+  mlPerMin,
+  tone,
+  threshold,
+}: {
+  minutesRemaining: number | null;
+  emptyClock: string | null;
+  confidence: Confidence;
+  mlPerMin: number | null;
+  tone: "normal" | "warning" | "critical";
+  threshold: number;
+}) {
+  const toneBorder =
+    tone === "critical"
+      ? "border-destructive/50 bg-destructive/10"
+      : tone === "warning"
+        ? "border-warning/50 bg-warning/10"
+        : "border-success/40 bg-success/5";
+  const toneText =
+    tone === "critical" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-success";
+  const iconBg =
+    tone === "critical"
+      ? "bg-destructive text-destructive-foreground"
+      : tone === "warning"
+        ? "bg-warning text-warning-foreground"
+        : "bg-success text-success-foreground";
+  const headline =
+    minutesRemaining === null
+      ? "Awaiting stable trend…"
+      : minutesRemaining < 1
+        ? "Less than 1 minute left"
+        : `Approx. ${Math.round(minutesRemaining)} minute${Math.round(minutesRemaining) === 1 ? "" : "s"} left`;
+  const confLabel = confidence.charAt(0).toUpperCase() + confidence.slice(1);
+  const confPill =
+    confidence === "high"
+      ? "bg-success/15 text-success"
+      : confidence === "medium"
+        ? "bg-warning/15 text-warning"
+        : "bg-muted text-muted-foreground";
+
+  return (
+    <section
+      className={`rounded-2xl border p-5 ${toneBorder} ${tone === "critical" ? "animate-pulse-critical" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg}`}>
+            <TrendingDown className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Prediction</p>
+            <h3 className={`text-lg font-semibold ${toneText}`}>{headline}</h3>
+          </div>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${confPill}`}
+        >
+          <ShieldCheck className="h-3 w-3" /> {confLabel} confidence
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Stat label="Expected empty at" value={emptyClock ?? "—"} mono />
+        <Stat
+          label="Drain rate"
+          value={mlPerMin && mlPerMin < 0 ? `${Math.abs(mlPerMin).toFixed(2)} ml/min` : "—"}
+        />
+        <Stat label="Empty threshold" value={`${threshold} ml`} />
+      </div>
+
+      {tone !== "normal" && minutesRemaining !== null && (
+        <p className={`mt-4 text-sm font-medium ${toneText}`}>
+          {tone === "critical"
+            ? "🚨 Critical — prepare replacement bottle now."
+            : "⚠ Warning — bottle change needed soon."}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border bg-card/60 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${mono ? "tabular-nums" : ""}`}>{value}</p>
     </div>
   );
 }

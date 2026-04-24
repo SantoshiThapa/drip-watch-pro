@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPredictRouteImport } from './routes/api/predict'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPredictRoute = ApiPredictRouteImport.update({
+  id: '/api/predict',
+  path: '/api/predict',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDataRoute = ApiDataRouteImport.update({
@@ -26,27 +32,31 @@ const ApiDataRoute = ApiDataRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/data': typeof ApiDataRoute
+  '/api/predict': typeof ApiPredictRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/data': typeof ApiDataRoute
+  '/api/predict': typeof ApiPredictRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/data': typeof ApiDataRoute
+  '/api/predict': typeof ApiPredictRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/data'
+  fullPaths: '/' | '/api/data' | '/api/predict'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/data'
-  id: '__root__' | '/' | '/api/data'
+  to: '/' | '/api/data' | '/api/predict'
+  id: '__root__' | '/' | '/api/data' | '/api/predict'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiDataRoute: typeof ApiDataRoute
+  ApiPredictRoute: typeof ApiPredictRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/predict': {
+      id: '/api/predict'
+      path: '/api/predict'
+      fullPath: '/api/predict'
+      preLoaderRoute: typeof ApiPredictRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/data': {
@@ -71,7 +88,17 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiDataRoute: ApiDataRoute,
+  ApiPredictRoute: ApiPredictRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
