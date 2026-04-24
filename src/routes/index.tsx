@@ -27,7 +27,7 @@ import {
   AreaChart,
 } from "recharts";
 import { format, formatDistanceToNow } from "date-fns";
-import { predictMinutesRemaining, formatDuration } from "@/lib/predict";
+import { predictMinutesRemaining, formatDuration, type Confidence } from "@/lib/predict";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
