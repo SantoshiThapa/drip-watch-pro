@@ -250,13 +250,7 @@ function Dashboard() {
                 : "estimating…"
             }
             icon={<Clock className="h-5 w-5" />}
-            tone={
-              prediction.minutesRemaining !== null && prediction.minutesRemaining < 10
-                ? "critical"
-                : prediction.minutesRemaining !== null && prediction.minutesRemaining < 30
-                  ? "warning"
-                  : "normal"
-            }
+            tone={predictionTone}
           />
           <KpiCard
             label="Last Update"
