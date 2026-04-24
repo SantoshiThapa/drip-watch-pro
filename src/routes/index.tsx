@@ -28,6 +28,7 @@ import {
 } from "recharts";
 import { format, formatDistanceToNow } from "date-fns";
 import { predictMinutesRemaining, formatDuration, type Confidence } from "@/lib/predict";
+import { PredictionCard } from "@/components/PredictionCard";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
