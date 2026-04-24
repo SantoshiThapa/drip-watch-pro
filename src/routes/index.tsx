@@ -116,21 +116,62 @@ function Dashboard() {
   }, [latest, threshold]);
 
   const prediction = useMemo(
-    () => predictMinutesRemaining(readings.map((r) => ({ weight: r.weight, created_at: r.created_at }))),
-    [readings],
+    () =>
+      predictMinutesRemaining(
+        readings.map((r) => ({ weight: r.weight, created_at: r.created_at })),
+        5 * 60 * 1000,
+        threshold,
+      ),
+    [readings, threshold],
   );
 
-  const chartData = useMemo(
-    () =>
-      [...readings]
-        .reverse()
-        .map((r) => ({
-          time: format(new Date(r.created_at), "HH:mm:ss"),
-          weight: Number(r.weight),
-          dripRate: Number(r.drip_rate),
-        })),
-    [readings],
-  );
+  const emptyClock = useMemo(() => {
+    const m = prediction.minutesRemaining;
+    if (m === null || !isFinite(m)) return null;
+    const d = new Date(now + m * 60_000);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }, [prediction.minutesRemaining, now]);
+
+  const predictionTone: "normal" | "warning" | "critical" =
+    prediction.minutesRemaining === null
+      ? "normal"
+      : prediction.minutesRemaining < 5
+        ? "critical"
+        : prediction.minutesRemaining < 15
+          ? "warning"
+          : "normal";
+
+  const chartData = useMemo(() => {
+    const ordered = [...readings].reverse();
+    // Compute a trend line from the same regression used for prediction
+    let slope = 0;
+    let intercept = 0;
+    if (ordered.length >= 2) {
+      const t0 = new Date(ordered[0].created_at).getTime();
+      const xs = ordered.map((r) => (new Date(r.created_at).getTime() - t0) / 60000);
+      const ys = ordered.map((r) => Number(r.weight));
+      const n = xs.length;
+      const sX = xs.reduce((a, b) => a + b, 0);
+      const sY = ys.reduce((a, b) => a + b, 0);
+      const sXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+      const sXX = xs.reduce((a, x) => a + x * x, 0);
+      const denom = n * sXX - sX * sX;
+      if (denom !== 0) {
+        slope = (n * sXY - sX * sY) / denom;
+        intercept = (sY - slope * sX) / n;
+      }
+    }
+    const t0 = ordered.length ? new Date(ordered[0].created_at).getTime() : 0;
+    return ordered.map((r) => {
+      const x = (new Date(r.created_at).getTime() - t0) / 60000;
+      return {
+        time: format(new Date(r.created_at), "HH:mm:ss"),
+        weight: Number(r.weight),
+        dripRate: Number(r.drip_rate),
+        trend: ordered.length >= 2 ? Math.max(0, intercept + slope * x) : null,
+      };
+    });
+  }, [readings]);
 
   const saveThreshold = async () => {
     const v = Number(thresholdInput);
